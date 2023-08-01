@@ -4,6 +4,8 @@ from itertools import permutations
 import json
 import os
 
+# WIDTH_MAX = 1920
+# HEIGHT_MAX = 1080
 
 ############### Setting Importation ###############
 
@@ -18,8 +20,8 @@ print("Camera Data:", data)
 cv2.namedWindow("Billard", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Billard", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 cap = cv2.VideoCapture(camera_number)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH_MAX)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT_MAX)
 
 if os.path.isfile("debug.mp4"):
     cap = cv2.VideoCapture("debug.mp4")
@@ -44,7 +46,7 @@ while True:
 
     cv2.imshow("Billard", frame)
 
-# frame2 = cv2.resize(frame2,(1920,1080))
+# frame2 = cv2.resize(frame2,(WIDTH_MAX,HEIGHT_MAX))
 
 cv2.imwrite("background.jpg", frame2)
 

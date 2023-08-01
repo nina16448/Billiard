@@ -3,7 +3,10 @@ import cv2
 import json
 
 ############### Trouver Caméra ###############
-
+WIDTH_MAX = 1920
+HEIGHT_MAX = 1080
+# WIDTH_MAX = 1280
+# HEIGHT_MAX = 960
 cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
@@ -21,12 +24,12 @@ while True:
         cap = cv2.VideoCapture(camera_number)
         test, frame = cap.read()
 
-    frame = cv2.resize(frame, (1920, 1080))
+    frame = cv2.resize(frame, (WIDTH_MAX, HEIGHT_MAX))
 
     while True:
         ok, frame = cap.read()
         assert ok, "Camera disconnected"
-        frame = cv2.resize(frame, (1920, 1080))
+        frame = cv2.resize(frame, (WIDTH_MAX, HEIGHT_MAX))
 
         cv2.putText(
             frame,
@@ -53,7 +56,11 @@ while True:
 cv2.destroyAllWindows()
 cap.release()
 
-data = {"camera_number": camera_number}
+data = {
+    "camera_number": camera_number,
+    "WIDTH_MAX": WIDTH_MAX,
+    "HEIGHT_MAX": HEIGHT_MAX,
+}
 with open("camera.json", "w") as f:
     json.dump(data, f)
 

@@ -9,6 +9,9 @@ import numpy.polynomial.polynomial as poly
 from random import random
 import os.path
 
+# WIDTH_MAX = 1920
+# HEIGHT_MAX = 1080
+
 ############### Setting Importation ###############
 
 with open("camera.json", "r") as f:
@@ -35,21 +38,23 @@ cv2.setWindowProperty(
 
 
 cap = cv2.VideoCapture(camera_number)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH_MAX)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT_MAX)
 cap.set(cv2.CAP_PROP_FPS, 30)
+print("width: ", cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+print("height: ", cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 print("fps: ", cap.get(cv2.CAP_PROP_FPS))
 
 
 ret, frame = cap.read()
 l, h, c = frame.shape
-cadre = (1920, 1080)
+cadre = (WIDTH_MAX, HEIGHT_MAX)
 print(l, h)
 
 
 flagg = False
 clean_time = -3
-put_time = 0
+put_time = -5
 POSlist = []
 ipPOSlist = []
 
@@ -108,8 +113,8 @@ class Ball:
         dp = self.polynome_distance(tv) - self.polynome_distance(tv + dt)
         px = x + dx * v * dt
         py = y + dy * v * dt
-        px = min(max(px, 1), 1919)
-        py = min(max(py, 1), 1079)
+        px = min(max(px, 1), (WIDTH_MAX - 1))
+        py = min(max(py, 1), (HEIGHT_MAX - 1))
         # x += dx*dp
         # y += dy*dp
 
@@ -234,8 +239,8 @@ class Ball:
                 self.movestate = 1
                 print("Launch", t, self.prediction_run, "id", self.id)
                 dt = (time.time() - t_prediction) * 7
-                px = min(max(x + dx * v * dt, 1), 1919)
-                py = min(max(y + dy * v * dt, 1), 1079)
+                px = min(max(x + dx * v * dt, 1), (WIDTH_MAX - 1))
+                py = min(max(y + dy * v * dt, 1), (HEIGHT_MAX - 1))
 
                 scale = 100
 
@@ -305,16 +310,14 @@ _, frame = cap.read()
 
 prevframe = frame[:, :, :]  # frame[:,:,2]    #First frame
 prevframe = cv2.warpPerspective(
-    prevframe, m_camera2screen, (1920, 1080), flags=cv2.INTER_LINEAR
+    prevframe, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
 )
 cv2.imshow("Billard", prevframe)
 
 background = cv2.imread("background.jpg")[:, :, 2]
 background = cv2.warpPerspective(
-    background, m_camera2screen, (1920, 1080), flags=cv2.INTER_LINEAR
+    background, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
 )
-
-fond = cv2.imread("FondDVIC.png")
 
 debut_time = time.time()
 n_frame = 0
@@ -335,34 +338,34 @@ while True:
     ret, frame = cap.read()
     nextframe = frame[:, :, 2].copy()
     # frame = cv2.warpPerspective(
-    #     frame, m_camera2screen, (1920, 1080), flags=cv2.INTER_LINEAR
+    #     frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
     # )
     # background = frame[:, :, 2]
     # newframe = background
     nextframe = cv2.warpPerspective(
-        nextframe, m_camera2screen, (1920, 1080), flags=cv2.INTER_LINEAR
+        nextframe, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
     )
 
     nextframe = cv2.absdiff(background, nextframe)
 
     nextframe = cv2.GaussianBlur(nextframe, (5, 5), 0)
 
-    _, nextframe = cv2.threshold(nextframe, 80, 255, cv2.THRESH_BINARY)
-
+    _, nextframe = cv2.threshold(nextframe, 100, 255, cv2.THRESH_BINARY)
+    # newframe = nextframe
     contours, hierarchy = cv2.findContours(
         nextframe, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
     )
-    # newframe = nextframe
+
     # newframe = fond.copy()  # np.zeros(frame.shape)
     newframe = cv2.warpPerspective(
-        frame, m_camera2screen, (1920, 1080), flags=cv2.INTER_LINEAR
+        frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
     )
 
     l = []
 
     for c in contours:
         M = cv2.moments(c)
-        cv2.drawContours(newframe, contours, -1, (255, 0, 255), 10)
+        cv2.drawContours(newframe, contours, -1, (255, 0, 255), 2)
 
         area = cv2.contourArea(c)
         perimeter = cv2.arcLength(c, True)
@@ -386,19 +389,19 @@ while True:
             [vx, vy, x, y] = cv2.fitLine(c, cv2.DIST_L2, 0, 0.01, 0.01)
             cv2.line(
                 newframe,
-                tuple(map(int, (x + vx * -1920, y + vy * -1920))),
-                tuple(map(int, (x + vx * 1920, y + vy * 1920))),
+                tuple(map(int, (x + vx * -WIDTH_MAX, y + vy * -WIDTH_MAX))),
+                tuple(map(int, (x + vx * WIDTH_MAX, y + vy * WIDTH_MAX))),
                 (255, 255, 255),
                 15,
             )
             # p = np.polyfit(lX, lY, 1)
-            # cv2.line(nextframe, (0, int(np.polyval(p, 0))), (1920, int(np.polyval(p, 1920))), 150, 20)
+            # cv2.line(nextframe, (0, int(np.polyval(p, 0))), (WIDTH_MAX, int(np.polyval(p, WIDTH_MAX))), 150, 20)
             continue
         # if maxx < circularity:
         #     maxx = circularity
         #     print(maxx)
         # print("circularity", circularity)
-        if circularity < 0.5:
+        if circularity < 0.55:
             continue
 
         x = int(M["m10"] / M["m00"])
@@ -424,9 +427,9 @@ while True:
         rx, ry = int(rx), int(ry)
         x, y = int(x), int(y)
         zoom = 0.7
-        aPos_x = (3.5 - float(y / 1079.0 * 7)) * 1
+        aPos_x = (3.5 - float(y / float(HEIGHT_MAX) * 7)) * 1
         aPos_y = 5.548624
-        aPos_z = (7.2 - float(x / 1919.0 * 14.4)) * 1
+        aPos_z = (7.2 - float(x / float(WIDTH_MAX) * 14.4)) * 1
 
         if flagg == False and v == 0:
             if put_time == 0:
@@ -442,9 +445,8 @@ while True:
                     json.dump(Posdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
                 flagg = True
 
-        if (
-            ball.movestate == 1 and v > 0 and t - rec_time > 10 and flagg == True
-        ):  # 上傳資料 只剩下範圍問題:))
+        if ball.movestate == 1 and v > 0 and t - rec_time > 10 and flagg == True:
+            # 上傳資料 只剩下範圍問題:))
             # flagg = False
             rec_time = t
             print("Hit")
@@ -529,6 +531,8 @@ while True:
     k = cv2.waitKey(1) & 0xFF
     if k == 27:
         break
+    elif k == ord("r"):
+        POSlist = []
 
 cv2.destroyAllWindows()
 cap.release()
