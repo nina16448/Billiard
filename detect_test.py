@@ -8,10 +8,6 @@ import os
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
-#### CPU setting #######
-pid = os.getpid()
-# os.sched_setaffinity(pid, {1})
-
 from models.experimental import attempt_load
 from models.common import DetectMultiBackend
 from utils.datasets import letterbox
@@ -33,8 +29,8 @@ import cv2
 
 
 ############### Setting Importation ###############
-WIDTH_MAX = 1280
-HEIGHT_MAX = 960
+# WIDTH_MAX = 1280
+# HEIGHT_MAX = 960
 clors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255)]
 
 with open("camera.json", "r") as f:
@@ -71,6 +67,9 @@ print("fps: ", cap.get(cv2.CAP_PROP_FPS))
 device = ""
 device = select_device(device)
 print(device)
+conf_thres = 0.45
+iou_thres = 0.45
+img_size = 640
 # detect_model = attempt_load(
 #     "./cue_cueball.pt", device=device, inplace=True, fuse=True
 # )  # load FP32 model
@@ -82,10 +81,6 @@ stride, names, pt = detect_model.stride, detect_model.names, detect_model.pt
 
 
 def detect(model, img):
-    conf_thres = 0.45
-    iou_thres = 0.45
-    img_size = 640
-    dict_list = []
     img0 = copy.deepcopy(img)
     h0, w0 = img.shape[:2]
     r = img_size / max(h0, w0)
@@ -127,8 +122,20 @@ def detect(model, img):
                 line = (cls, *xywh)  # label format
 
                 c = int(cls)  # integer class
+
                 label = f"{names[c]} {conf:.2f}"
+                print(c)
+                xywh = (
+                    (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
+                )  # normalized xywh
+                x, y = xywh[:2]
+                absolute_x = x * WIDTH_MAX
+                absolute_y = y * HEIGHT_MAX
+
+                print("label:", label, " Pos:", absolute_x, ", ", absolute_y)
+
                 annotator.box_label(xyxy, label, color=colors(c, True))
+
     return annotator.result()
 
 

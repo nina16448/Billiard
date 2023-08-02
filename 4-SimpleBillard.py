@@ -63,6 +63,19 @@ print("width: ", cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 print("height: ", cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 print("fps: ", cap.get(cv2.CAP_PROP_FPS))
 
+###### Yolo初始化 ############
+device = ""
+device = select_device(device)
+print(device)
+
+model = DetectMultiBackend(
+    "./cue_cueball.pt", device=device, dnn=False, data="./data/coco128.yaml", fp16=False
+)
+stride, names, pt = model.stride, model.names, model.pt
+conf_thres = 0.45
+iou_thres = 0.45
+img_size = 640
+
 
 ret, frame = cap.read()
 l, h, c = frame.shape
@@ -283,12 +296,14 @@ class Ball:
         for ball in Ball.lBall:
             ball.movestate = 0
             if t - ball.lPos[-1][0] > 1.5:
-                clean_time = t
-                put_time = 0
-                print("clean!")
-                flagg = False
-                POSlist = []
-                ipPOSlist = []
+                print("remove ", ball)
+                if len(Ball.lBall) == 1:
+                    print("clean all balls")
+                    clean_time = t
+                    put_time = 0
+                    flagg = False
+                    POSlist = []
+                    ipPOSlist = []
                 ball.__del__()
 
         if not lDetected_ball:
@@ -347,94 +362,158 @@ state = 0  # 0 靜止狀態 1 運動狀態
 # for i in range(250):
 #    ret, frame = cap.read()
 rec_time = -5
-
+OK_time = 0
 maxx = 0
 prev_M = []
+empty_flag = True
 
 while True:
+    l = []
+    YoloDet = []
     t_frame = time.time()
     ret, frame = cap.read()
-    nextframe = frame[:, :, 2].copy()
-    # frame = cv2.warpPerspective(
-    #     frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
+    # vvvvvvvvvv
+    # nextframe = frame[:, :, 2].copy()
+    # # frame = cv2.warpPerspective(
+    # #     frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
+    # # )
+    # # background = frame[:, :, 2]
+    # # newframe = background
+    # nextframe = cv2.warpPerspective(
+    #     nextframe, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
     # )
-    # background = frame[:, :, 2]
-    # newframe = background
-    nextframe = cv2.warpPerspective(
-        nextframe, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
-    )
 
-    nextframe = cv2.absdiff(background, nextframe)
+    # nextframe = cv2.absdiff(background, nextframe)
 
-    nextframe = cv2.GaussianBlur(nextframe, (5, 5), 0)
+    # nextframe = cv2.GaussianBlur(nextframe, (5, 5), 0)
 
-    _, nextframe = cv2.threshold(nextframe, 100, 255, cv2.THRESH_BINARY)
-    # newframe = nextframe
-    contours, hierarchy = cv2.findContours(
-        nextframe, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-    )
-
+    # _, nextframe = cv2.threshold(nextframe, 100, 255, cv2.THRESH_BINARY)
+    # # newframe = nextframe
+    # contours, hierarchy = cv2.findContours(
+    #     nextframe, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+    # )
+    # ^^^^^^^
     # newframe = fond.copy()  # np.zeros(frame.shape)
     newframe = cv2.warpPerspective(
         frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
     )
+    img = newframe
+    img0 = copy.deepcopy(newframe)
+    h0, w0 = img.shape[:2]
+    r = img_size / max(h0, w0)
+    if r != 1:  # 縮放圖片到640*640
+        interp = cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR
+        img0 = cv2.resize(img0, (int(w0 * r), int(h0 * r)), interpolation=interp)
 
-    l = []
+    imgsz = check_img_size(img_size, s=model.stride)  # check img_size
 
-    for c in contours:
-        M = cv2.moments(c)
-        cv2.drawContours(newframe, contours, -1, (255, 0, 255), 2)
+    img0 = letterbox(img0, new_shape=imgsz)[0]  # 檢測前處理，圖片長寬變為32倍數
+    img0 = img0[:, :, ::-1].transpose(2, 0, 1).copy()
+    # ^BGR to RGB, to 3x416x416  图片的BGR排列转为RGB,然后将图片的H,W,C排列变为C,H,W排列
+    img0 = torch.from_numpy(img0).to(device)
+    img0 = img0.float()  # uint8 to fp16/32
+    img0 /= 255.0  # 0 - 255 to 0.0 - 1.0
+    if img0.ndimension() == 3:
+        img0 = img0.unsqueeze(0)
 
-        area = cv2.contourArea(c)
-        perimeter = cv2.arcLength(c, True)
+    pred = model(img0)[0]
 
-        if perimeter == 0:
-            continue
+    pred = non_max_suppression(pred, conf_thres, iou_thres)
+    for i, det in enumerate(pred):  # detections per image
+        gn = torch.tensor(img.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        annotator = Annotator(img, line_width=3, example=str(names))
+        if len(det):
+            # Rescale boxes from img_size to im0 size
+            det[:, :4] = scale_boxes(img0.shape[2:], det[:, :4], img.shape).round()
 
-        circularity = 4 * np.pi * area / (perimeter * perimeter)
+            # Write results
+            for *xyxy, conf, cls in reversed(det):
+                xywh = (
+                    (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
+                )  # normalized xywh
+                line = (cls, *xywh)  # label format
 
-        # print("area", area)
-        # print("perimeter", perimeter)
-        # print("circularity", circularity)
-        # Surface trop petite ?
-        if M["m00"] < np.pi * 25**2:
-            continue
+                c = int(cls)  # integer class
 
-        lX = [x for [[x, _]] in c]
-        lY = [y for [[_, y]] in c]
+                label = f"{names[c]} {conf:.2f}"
+                xywh = (
+                    (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
+                )  # normalized xywh
+                x, y = xywh[:2]
+                absolute_x = x * WIDTH_MAX
+                absolute_y = y * HEIGHT_MAX
 
-        if np.corrcoef(lX, lY)[0, 1] ** 2 > 0.75:  # 球杆延伸線
-            [vx, vy, x, y] = cv2.fitLine(c, cv2.DIST_L2, 0, 0.01, 0.01)
-            cv2.line(
-                newframe,
-                tuple(map(int, (x + vx * -WIDTH_MAX, y + vy * -WIDTH_MAX))),
-                tuple(map(int, (x + vx * WIDTH_MAX, y + vy * WIDTH_MAX))),
-                (255, 255, 255),
-                15,
-            )
-            # p = np.polyfit(lX, lY, 1)
-            # cv2.line(nextframe, (0, int(np.polyval(p, 0))), (WIDTH_MAX, int(np.polyval(p, WIDTH_MAX))), 150, 20)
-            continue
-        # if maxx < circularity:
-        #     maxx = circularity
-        #     print(maxx)
-        # print("circularity", circularity)
-        if circularity < 0.55:
-            continue
+                if c == 1:
+                    l += [(absolute_x, absolute_y)]
 
-        x = int(M["m10"] / M["m00"])
-        y = int(M["m01"] / M["m00"])
-        ecartype = np.std(
-            [((x - ix) ** 2 + (y - iy) ** 2) ** 0.5 for ix, iy in zip(lX, lY)]
-        )
+                # Det_data = {"label": label, "Pos_X": absolute_x, "Pos_Y": absolute_y}
+                # YoloDet.append(Det_data)
+                # print("label:", label, " Pos:", absolute_x, ", ", absolute_y)
 
-        # 它看起來像一個圓圈嗎？
-        # if ecartype < 10:
-        # Ball.add_ball(t_frame, x, y)
-        # cv2.circle(newframe, (x, y), 50, (255, 255, 255), 10)
-        l += [(x, y)]
+                # annotator.box_label(xyxy, label, color=colors(c, True))
 
-        prev_M = M
+    # vvvvvvvvvv
+    # for c in contours:
+    #     M = cv2.moments(c)
+    #     cv2.drawContours(newframe, contours, -1, (255, 0, 255), 2)
+
+    #     area = cv2.contourArea(c)
+    #     perimeter = cv2.arcLength(c, True)
+
+    #     if perimeter == 0:
+    #         continue
+
+    #     circularity = 4 * np.pi * area / (perimeter * perimeter)
+
+    #     # print("area", area)
+    #     # print("perimeter", perimeter)
+    #     # print("circularity", circularity)
+    #     # Surface trop petite ?
+    #     if M["m00"] < np.pi * 25**2:
+    #         continue
+
+    #     lX = [x for [[x, _]] in c]
+    #     lY = [y for [[_, y]] in c]
+
+    #     if np.corrcoef(lX, lY)[0, 1] ** 2 > 0.75:  # 球杆延伸線
+    #         [vx, vy, x, y] = cv2.fitLine(c, cv2.DIST_L2, 0, 0.01, 0.01)
+    #         cv2.line(
+    #             newframe,
+    #             tuple(map(int, (x + vx * -WIDTH_MAX, y + vy * -WIDTH_MAX))),
+    #             tuple(map(int, (x + vx * WIDTH_MAX, y + vy * WIDTH_MAX))),
+    #             (255, 255, 255),
+    #             15,
+    #         )
+    #         # p = np.polyfit(lX, lY, 1)
+    #         # cv2.line(nextframe, (0, int(np.polyval(p, 0))), (WIDTH_MAX, int(np.polyval(p, WIDTH_MAX))), 150, 20)
+    #         continue
+    #     # if maxx < circularity:
+    #     #     maxx = circularity
+    #     #     print(maxx)
+    #     # print("circularity", circularity)
+    #     if circularity < 0.55:
+    #         continue
+
+    #     x = int(M["m10"] / M["m00"])
+    #     y = int(M["m01"] / M["m00"])
+    #     ecartype = np.std(
+    #         [((x - ix) ** 2 + (y - iy) ** 2) ** 0.5 for ix, iy in zip(lX, lY)]
+    #     )
+
+    #     # 它看起來像一個圓圈嗎？
+    #     # if ecartype < 10:
+    #     # Ball.add_ball(t_frame, x, y)
+    #     # cv2.circle(newframe, (x, y), 50, (255, 255, 255), 10)
+    #     l += [(x, y)]
+
+    #     prev_M = M
+    # ^^^^^^
+
+    if empty_flag and len(l) == 0:
+        print("empty")
+        put_time = 0
+
+    empty_flag = False
 
     Ball.mapping_detecting_balls(t_frame - debut_time, l)
 
@@ -452,7 +531,8 @@ while True:
         if flagg == False and v == 0:
             if put_time == 0:
                 put_time = t
-            if t - put_time > 5:
+            if t - put_time > 3:
+                OK_time = t
                 POSlist = []
                 print("New Position: ", ball)
                 print(aPos_x, ", ", aPos_y, ", ", aPos_z)
@@ -463,8 +543,14 @@ while True:
                     json.dump(Posdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
                 flagg = True
 
-        if ball.movestate == 1 and v > 0 and t - rec_time > 10 and flagg == True:
-            # 上傳資料 只剩下範圍問題:))
+        if (
+            ball.movestate == 1
+            and v > 0
+            and t - rec_time > 10
+            and flagg == True
+            and t - OK_time > 1
+        ):
+            # 上傳資料
             # flagg = False
             rec_time = t
             print("Hit")
