@@ -352,7 +352,7 @@ background = cv2.warpPerspective(
     background, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
 )
 
-debut_time = time.time()
+debut_time = time.time()  # 程式開始的時間
 n_frame = 0
 first = True
 t_prediction = time.time()
@@ -431,19 +431,15 @@ while True:
                 xywh = (
                     (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
                 )  # normalized xywh
-                line = (cls, *xywh)  # label format
-
                 c = int(cls)  # integer class
 
                 label = f"{names[c]} {conf:.2f}"
-                xywh = (
-                    (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
-                )  # normalized xywh
+
                 x, y = xywh[:2]
                 absolute_x = x * WIDTH_MAX
                 absolute_y = y * HEIGHT_MAX
 
-                if c == 1:
+                if c == 1:  # cue ball的ID
                     l += [(absolute_x, absolute_y)]
 
                 # Det_data = {"label": label, "Pos_X": absolute_x, "Pos_Y": absolute_y}
@@ -509,13 +505,13 @@ while True:
     #     prev_M = M
     # ^^^^^^
 
-    if empty_flag and len(l) == 0:
+    if empty_flag and len(l) == 0:  # 判斷在最一開始球桌是否為空
         print("empty")
         put_time = 0
 
     empty_flag = False
 
-    Ball.mapping_detecting_balls(t_frame - debut_time, l)
+    Ball.mapping_detecting_balls(t_frame - debut_time, l)  # 看所有偵測到的球對應到上一幀的哪一顆
 
     for ball in Ball.lBall:
         rx, ry, vx, vy, v = ball.interpolation((time.time() - t_prediction) + 0.4)
@@ -524,11 +520,12 @@ while True:
         rx, ry = int(rx), int(ry)
         x, y = int(x), int(y)
         zoom = 0.7
+
         aPos_x = (3.5 - float(y / float(HEIGHT_MAX) * 7)) * 1
         aPos_y = 5.548624
         aPos_z = (7.2 - float(x / float(WIDTH_MAX) * 14.4)) * 1
 
-        if flagg == False and v == 0:
+        if flagg == False and v == 0:  # 放置後等3秒才會傳新位置
             if put_time == 0:
                 put_time = t
             if t - put_time > 3:
