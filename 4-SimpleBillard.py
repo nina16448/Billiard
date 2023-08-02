@@ -3,15 +3,33 @@ import cv2
 import json
 from math import *
 from time import *
+from pathlib import Path
 import time
 import matplotlib.pyplot as plt
 import numpy.polynomial.polynomial as poly
 from random import random
-import os.path
+import os
+import torch
+import copy
 
-# WIDTH_MAX = 1920
-# HEIGHT_MAX = 1080
+from models.common import DetectMultiBackend
+from utils.datasets import letterbox
+from utils.general import (
+    check_img_size,
+    non_max_suppression,
+    apply_classifier,
+    scale_coords,
+    scale_boxes,
+    xyxy2xywh,
+    strip_optimizer,
+    set_logging,
+    increment_path,
+)
+from utils.cv_puttext import cv2ImgAddText
+from utils.plots import Annotator, colors, save_one_box
+from utils.torch_utils import select_device, smart_inference_mode
 
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 ############### Setting Importation ###############
 
 with open("camera.json", "r") as f:

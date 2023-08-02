@@ -8,7 +8,11 @@ import os
 
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
-# from models.experimental import attempt_load
+#### CPU setting #######
+pid = os.getpid()
+# os.sched_setaffinity(pid, {1})
+
+from models.experimental import attempt_load
 from models.common import DetectMultiBackend
 from utils.datasets import letterbox
 from utils.general import (
@@ -66,45 +70,15 @@ print("fps: ", cap.get(cv2.CAP_PROP_FPS))
 ###### Yolo初始化 ############
 device = ""
 device = select_device(device)
-# detect_model = attempt_load("./cue_cueball.pt", map_location=device)  # load FP32 model
+print(device)
+# detect_model = attempt_load(
+#     "./cue_cueball.pt", device=device, inplace=True, fuse=True
+# )  # load FP32 model
 
 detect_model = DetectMultiBackend(
     "./cue_cueball.pt", device=device, dnn=False, data="./data/coco128.yaml", fp16=False
 )
 stride, names, pt = detect_model.stride, detect_model.names, detect_model.pt
-
-
-def scale_coords_landmarks(img1_shape, coords, img0_shape, ratio_pad=None):  # 返回到原图坐标
-    # Rescale coords (xyxy) from img1_shape to img0_shape
-    if ratio_pad is None:  # calculate from img0_shape
-        gain = min(
-            img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1]
-        )  # gain  = old / new
-        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (
-            img1_shape[0] - img0_shape[0] * gain
-        ) / 2  # wh padding
-    else:
-        gain = ratio_pad[0][0]
-        pad = ratio_pad[1]
-
-    print("coords shape:", coords.shape)
-    print("pad[0]:", pad[0])
-
-    coords[:, [0, 2, 4, 6]] -= pad[0]  # x padding
-    coords[:, [1, 3, 5, 7]] -= pad[1]  # y padding
-    coords[:, :8] /= gain
-    # clip_coords(coords, img0_shape)
-    coords[:, 0].clamp_(0, img0_shape[1])  # x1
-    coords[:, 1].clamp_(0, img0_shape[0])  # y1
-    coords[:, 2].clamp_(0, img0_shape[1])  # x2
-    coords[:, 3].clamp_(0, img0_shape[0])  # y2
-    coords[:, 4].clamp_(0, img0_shape[1])  # x3
-    coords[:, 5].clamp_(0, img0_shape[0])  # y3
-    coords[:, 6].clamp_(0, img0_shape[1])  # x4
-    coords[:, 7].clamp_(0, img0_shape[0])  # y4
-    # coords[:, 8].clamp_(0, img0_shape[1])  # x5
-    # coords[:, 9].clamp_(0, img0_shape[0])  # y5
-    return coords
 
 
 def detect(model, img):
@@ -155,59 +129,31 @@ def detect(model, img):
                 c = int(cls)  # integer class
                 label = f"{names[c]} {conf:.2f}"
                 annotator.box_label(xyxy, label, color=colors(c, True))
-
-            # # Rescale boxes from img_size to im0 size
-            # det[:, :4] = scale_coords(img.shape[2:], det[:, :4], img.shape).round()
-
-            # # Print results
-            # for c in det[:, -1].unique():
-            #     n = (det[:, -1] == c).sum()  # detections per class
-            # # print("det[:, 5:13]:", det[:, 5:13])
-
-            # # det[:, 5:13] = scale_coords_landmarks(
-            # #     img.shape[2:], det[:, 5:13], img.shape
-            # # ).round()
-            # det[:, :4] = scale_boxes(img.shape[2:], det[:, :4], img.shape).round()
-
-            # for j in range(det.size()[0]):
-            #     result_dict = {}
-            #     xyxy = det[j, :4].view(-1).tolist()
-            #     x1 = int(xyxy[0])
-            #     y1 = int(xyxy[1])
-            #     x2 = int(xyxy[2])
-            #     y2 = int(xyxy[3])
-            #     rect = [x1, y1, x2, y2]
-
-            #     conf = det[j, 4].cpu().numpy()
-            #     # landmarks = det[j, 5:13].view(-1).tolist()
-            #     # landmarks_np = np.zeros((4, 2))
-            #     # for i in range(4):
-            #     #     point_x = int(landmarks[2 * i])
-            #     #     point_y = int(landmarks[2 * i + 1])
-            #     # landmarks_np[i] = np.array([point_x, point_y])
-
-            #     class_num = det[j, 6].cpu().numpy()
-            #     class_label = int(class_num)
-
-            #     result_dict["rect"] = rect
-            #     result_dict["detect_conf"] = conf
-            #     # result_dict["landmarks"] = landmarks_np.tolist()
-            #     result_dict["plate_type"] = class_label
-
-            #     dict_list.append(result_dict)
-
     return annotator.result()
 
 
 while True:
+    t_frame = time.time()
     ret, frame = cap.read()
     l, h, c = frame.shape
     # print(l, h)
 
-    frame = cv2.warpPerspective(frame, m_camera2screen, (h, l), flags=cv2.INTER_LINEAR)
+    frame = cv2.warpPerspective(
+        frame, m_camera2screen, (WIDTH_MAX, HEIGHT_MAX), flags=cv2.INTER_LINEAR
+    )
 
     ori_img = detect(detect_model, frame)
     # ori_img = draw_result(frame, dict_list)
+    cv2.putText(
+        ori_img,
+        "FPS: " + str(int(1 / (time.time() - t_frame))),
+        (50, 50),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2,
+        (255, 255, 255),
+        3,
+        cv2.LINE_AA,
+    )
     cv2.imshow("Billard", ori_img)
 
     k = cv2.waitKey(1) & 0xFF
