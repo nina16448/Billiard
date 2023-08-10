@@ -11,7 +11,7 @@ cv2.namedWindow("Camera", cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty("Camera", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
 
-camera_number = "/dev/video1"
+camera_number = "/dev/video3"
 
 while True:
     cap = cv2.VideoCapture(camera_number)

@@ -16,38 +16,22 @@ dynamodb = boto3.resource(
     region_name=region_name,
 )
 
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return float(o)
+        return super(DecimalEncoder, self).default(o)
+
+
 table = dynamodb.Table("BilliardTable")
 
 # 要監控的目錄
 directory_to_watch = "./"  # 替換為你要監控的目錄
-
+t_reset = 0
 while True:
+    t = time.time()
     # 檢查 'Hit.json' 是否存在於目錄中
-    if "Hit.json" in os.listdir(directory_to_watch):
-        print("get data Hit.json")
-        # 如果存在，讀取該檔案
-        with open(os.path.join(directory_to_watch, "Hit.json"), "r") as f:
-            data = json.load(f)
-
-        # 讀取後刪除該檔案
-        os.remove(os.path.join(directory_to_watch, "Hit.json"))
-
-        # 確保主鍵值設定為 1
-        data["Id"] = 1
-
-        # 將 'data' 中的任何浮點數轉換為 Decimals
-        for key, value in data.items():
-            if isinstance(value, dict):
-                for subkey, subvalue in value.items():
-                    if isinstance(subvalue, float):
-                        data[key][subkey] = Decimal(str(subvalue))
-            elif isinstance(value, float):
-                data[key] = Decimal(str(value))
-
-        # 將資料推送至 DynamoDB 表格
-        response = table.put_item(Item=data)
-
-        print("Hit.json upload success!")
 
     if "Position.json" in os.listdir(directory_to_watch):
         print("get data Position.json")
@@ -74,3 +58,46 @@ while True:
         response = table.put_item(Item=data)
 
         print("Position.json upload success!")
+
+    elif "Hit.json" in os.listdir(directory_to_watch):
+        print("get data Hit.json")
+        # 如果存在，讀取該檔案
+        with open(os.path.join(directory_to_watch, "Hit.json"), "r") as f:
+            data = json.load(f)
+
+        # 讀取後刪除該檔案
+        os.remove(os.path.join(directory_to_watch, "Hit.json"))
+
+        # 確保主鍵值設定為 1
+        data["Id"] = 1
+
+        # 將 'data' 中的任何浮點數轉換為 Decimals
+        for key, value in data.items():
+            if isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    if isinstance(subvalue, float):
+                        data[key][subkey] = Decimal(str(subvalue))
+            elif isinstance(value, float):
+                data[key] = Decimal(str(value))
+
+        # 將資料推送至 DynamoDB 表格
+        response = table.put_item(Item=data)
+
+        print("Hit.json upload success!")
+    id = 5
+
+    # if t - t_reset > 3:
+    #     print("Wait...")
+    #     response = table.get_item(Key={"Id": id})
+    #     item = response.get("Item")
+    #     if item is not None:
+    #         t_reset = t
+    #         print(f"Item with ID {id} found:", item)
+    #         table.delete_item(Key={"Id": id})
+    #         del item["Id"]
+    #         with open("reset.json", "w") as file:
+    #             json.dump(item, file, cls=DecimalEncoder)
+
+    #         print("reset")
+
+    time.sleep(0.1)  # Wait for 0.1 seconds.

@@ -54,8 +54,8 @@ cv2.setWindowProperty(
     "Billard", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
 )  # , cv2.WINDOW_NORMAL, cv2.WINDOW_NORMAL) #
 
-
-cap = cv2.VideoCapture(camera_number)
+cap = cv2.VideoCapture("result.avi")
+# cap = cv2.VideoCapture(camera_number)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH_MAX)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT_MAX)
 cap.set(cv2.CAP_PROP_FPS, 30)
@@ -366,12 +366,15 @@ OK_time = 0
 maxx = 0
 prev_M = []
 empty_flag = True
+reset_flag = True
 
 while True:
     l = []
     YoloDet = []
     t_frame = time.time()
     ret, frame = cap.read()
+    if not ret:
+        cv2.waitKey(0)
     # vvvvvvvvvv
     # nextframe = frame[:, :, 2].copy()
     # # frame = cv2.warpPerspective(
@@ -525,10 +528,16 @@ while True:
         aPos_y = 5.548624
         aPos_z = (7.2 - float(x / float(WIDTH_MAX) * 14.4)) * 1
 
-        if flagg == False and v == 0:  # 放置後等3秒才會傳新位置
+        if "reset.json" in os.listdir("./"):
+            # 讀取後刪除該檔案
+            os.remove(os.path.join("./", "reset.json"))
+            print("reset")
+            reset_flag = True
+
+        if flagg == False and v == 0 and reset_flag == True:  # 放置後等3秒才會傳新位置
             if put_time == 0:
                 put_time = t
-            if t - put_time > 3:
+            if t - put_time > 1.5:
                 OK_time = t
                 POSlist = []
                 print("New Position: ", ball)
@@ -539,13 +548,20 @@ while True:
                 with open("Position.json", "w") as f:
                     json.dump(Posdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
                 flagg = True
+                reset_flag = False
+
+        # print(ball.movestate)
+        # print(v)
+        # print(t - rec_time)
+        # print(flagg)
+        # print(t - OK_time)
 
         if (
             ball.movestate == 1
             and v > 0
-            and t - rec_time > 10
+            and t - rec_time > 5
             and flagg == True
-            and t - OK_time > 1
+            and t - OK_time > 0
         ):
             # 上傳資料
             # flagg = False
@@ -638,3 +654,4 @@ while True:
 cv2.destroyAllWindows()
 cap.release()
 exit()
+# cv2.waitKey(0)
