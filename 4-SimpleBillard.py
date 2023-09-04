@@ -54,8 +54,8 @@ cv2.setWindowProperty(
     "Billard", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
 )  # , cv2.WINDOW_NORMAL, cv2.WINDOW_NORMAL) #
 
-cap = cv2.VideoCapture("result.avi")
-# cap = cv2.VideoCapture(camera_number)
+# cap = cv2.VideoCapture("result.avi")
+cap = cv2.VideoCapture(camera_number)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH_MAX)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT_MAX)
 cap.set(cv2.CAP_PROP_FPS, 30)
@@ -561,7 +561,7 @@ while True:
             and v > 0
             and t - rec_time > 5
             and flagg == True
-            and t - OK_time > 0
+            and t - OK_time > 1
         ):
             # 上傳資料
             # flagg = False
@@ -654,4 +654,3 @@ while True:
 cv2.destroyAllWindows()
 cap.release()
 exit()
-# cv2.waitKey(0)
