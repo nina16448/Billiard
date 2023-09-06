@@ -50,9 +50,9 @@ print("Calibraton Data:", data)
 
 ############### Configuration Fenetre ###############
 cv2.namedWindow("Billard", cv2.WND_PROP_FULLSCREEN)
-cv2.setWindowProperty(
-    "Billard", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
-)  # , cv2.WINDOW_NORMAL, cv2.WINDOW_NORMAL) #
+# cv2.setWindowProperty(
+#     "Billard", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
+# )  # , cv2.WINDOW_NORMAL, cv2.WINDOW_NORMAL) #
 
 # cap = cv2.VideoCapture("result.avi")
 cap = cv2.VideoCapture(camera_number)
@@ -72,8 +72,8 @@ model = DetectMultiBackend(
     "./cue_cueball.pt", device=device, dnn=False, data="./data/coco128.yaml", fp16=False
 )
 stride, names, pt = model.stride, model.names, model.pt
-conf_thres = 0.45
-iou_thres = 0.45
+conf_thres = 0.5
+iou_thres = 0.5
 img_size = 640
 
 
@@ -88,6 +88,7 @@ clean_time = -3
 put_time = -5
 POSlist = []
 ipPOSlist = []
+myturn = True  # P1 first
 
 
 class Ball:
@@ -422,6 +423,7 @@ while True:
     pred = model(img0)[0]
 
     pred = non_max_suppression(pred, conf_thres, iou_thres)
+    maxconf = 0
     for i, det in enumerate(pred):  # detections per image
         gn = torch.tensor(img.shape)[[1, 0, 1, 0]]  # normalization gain whwh
         annotator = Annotator(img, line_width=3, example=str(names))
@@ -443,7 +445,10 @@ while True:
                 absolute_y = y * HEIGHT_MAX
 
                 if c == 1:  # cue ball的ID
-                    l += [(absolute_x, absolute_y)]
+                    if conf > maxconf: ###### 取最大的
+                        maxconf = conf
+                        print("max conf = ", maxconf)
+                        l += [(absolute_x, absolute_y)]
 
                 # Det_data = {"label": label, "Pos_X": absolute_x, "Pos_Y": absolute_y}
                 # YoloDet.append(Det_data)
@@ -516,118 +521,125 @@ while True:
 
     Ball.mapping_detecting_balls(t_frame - debut_time, l)  # 看所有偵測到的球對應到上一幀的哪一顆
 
-    for ball in Ball.lBall:
-        rx, ry, vx, vy, v = ball.interpolation((time.time() - t_prediction) + 0.4)
-        t, x, y = ball.lPos[-1]
-        atv, adx, ady, av = ball.lVitesse[-1]
-        rx, ry = int(rx), int(ry)
-        x, y = int(x), int(y)
-        zoom = 0.7
+    if "turn.json" in os.listdir("./"):
+        myturn = True
+        # 讀取後刪除該檔案
+        os.remove(os.path.join("./", "turn.json"))
+        print("turn")
 
-        aPos_x = (3.5 - float(y / float(HEIGHT_MAX) * 7)) * 1
-        aPos_y = 5.548624
-        aPos_z = (7.2 - float(x / float(WIDTH_MAX) * 14.4)) * 1
+    if myturn == True:
+        for ball in Ball.lBall:
+            rx, ry, vx, vy, v = ball.interpolation((time.time() - t_prediction) + 0.4)
+            t, x, y = ball.lPos[-1]
+            atv, adx, ady, av = ball.lVitesse[-1]
+            rx, ry = int(rx), int(ry)
+            x, y = int(x), int(y)
+            zoom = 0.7
 
-        if "reset.json" in os.listdir("./"):
-            # 讀取後刪除該檔案
-            os.remove(os.path.join("./", "reset.json"))
-            print("reset")
-            reset_flag = True
+            aPos_x = (3.5 - float(y / float(HEIGHT_MAX) * 7)) * -1
+            aPos_y = 5.548624
+            aPos_z = (7.2 - float(x / float(WIDTH_MAX) * 14.4)) * -1
 
-        if flagg == False and v == 0 and reset_flag == True:  # 放置後等3秒才會傳新位置
-            if put_time == 0:
-                put_time = t
-            if t - put_time > 1.5:
-                OK_time = t
-                POSlist = []
-                print("New Position: ", ball)
-                print(aPos_x, ", ", aPos_y, ", ", aPos_z)
-                Posdata = {
-                    "Position": {"x": aPos_x, "y": aPos_y, "z": aPos_z},
+            if "reset.json" in os.listdir("./"):
+                # 讀取後刪除該檔案
+                os.remove(os.path.join("./", "reset.json"))
+                print("reset")
+                reset_flag = True
+                flagg = False
+
+            if flagg == False and v == 0 and reset_flag == True:  # 放置後等3秒才會傳新位置
+                if put_time == 0:
+                    put_time = t
+                if t - put_time > 1.5:
+                    OK_time = t
+                    POSlist = []
+                    print("New Position: ", ball)
+                    print(aPos_x, ", ", aPos_y, ", ", aPos_z)
+                    Posdata = {
+                        "Position": {"x": aPos_x, "y": aPos_y, "z": aPos_z},
+                    }
+                    with open("Position.json", "w") as f:
+                        json.dump(
+                            Posdata, f, indent=4
+                        )  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
+                    with open("./unity/Player1_Data/CueBallPosition.json", "w") as f:
+                        json.dump(
+                            Posdata, f, indent=4
+                        )  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
+                    flagg = True
+                    reset_flag = False
+
+            if (
+                ball.movestate == 1
+                and v > 0
+                and t - rec_time > 10
+                and flagg == True
+                and t - OK_time > 2
+            ):
+                # 上傳資料
+                # flagg = False
+                rec_time = t
+                print("Hit")
+                HitSpeed = v  # 0-8
+                if HitSpeed > 700:
+                    HitSpeed = 700
+                # HitSpeed = float(HitSpeed / 700) * 8.0
+                HitSpeed = np.log2(HitSpeed) - 2.5
+                Dir_x = ady  # 1 - -1
+                Dir_y = 0
+                Dir_z = adx
+                print("Hit: ", ball)
+                print(HitSpeed)
+                print(Dir_x, ", ", Dir_y, ", ", Dir_z)
+                # 建立一個字典來存放你的變數
+                Hitdata = {
+                    "HitSpeed": HitSpeed,
+                    "HitDirection": {"x": Dir_x, "y": Dir_y, "z": Dir_z},
                 }
-                with open("Position.json", "w") as f:
-                    json.dump(Posdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
-                flagg = True
-                reset_flag = False
+                with open("Hit.json", "w") as f:
+                    json.dump(Hitdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
+                with open("./unity/Player1_Data/HitParams.json", "w") as f:
+                    json.dump(Hitdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
 
-        # print(ball.movestate)
-        # print(v)
-        # print(t - rec_time)
-        # print(flagg)
-        # print(t - OK_time)
+                myturn = False  # 換人
 
-        if (
-            ball.movestate == 1
-            and v > 0
-            and t - rec_time > 5
-            and flagg == True
-            and t - OK_time > 1
-        ):
-            # 上傳資料
-            # flagg = False
-            rec_time = t
-            print("Hit")
-            HitSpeed = v  # 0-8
-            if HitSpeed > 700:
-                HitSpeed = 700
-            # HitSpeed = float(HitSpeed / 700) * 8.0
-            HitSpeed = np.log2(HitSpeed) - 2.5
-            Dir_x = -ady  # 1 - -1
-            Dir_y = 0
-            Dir_z = -adx
-            print("Hit: ", ball)
-            print(HitSpeed)
-            print(Dir_x, ", ", Dir_y, ", ", Dir_z)
-            # 建立一個字典來存放你的變數
-            Hitdata = {
-                "HitSpeed": HitSpeed,
-                "HitDirection": {"x": Dir_x, "y": Dir_y, "z": Dir_z},
-            }
-            with open("Hit.json", "w") as f:
-                json.dump(Hitdata, f, indent=4)  # 使用indent參數來讓輸出的json格式有縮排，看起來更整潔
+            for road in POSlist:
+                cv2.circle(newframe, road, 50, (255, 0, 0), 10)
 
-        # print("state", state)
+            cv2.circle(newframe, (x, y), 50, (255, 255, 255), 10)
 
-        # for road in ipPOSlist:
-        #     cv2.circle(newframe, road, 50, (0, 0, 0), 10)
+            if (x, y) not in POSlist:
+                POSlist.append((x, y))
 
-        for road in POSlist:
-            cv2.circle(newframe, road, 50, (255, 0, 0), 10)
+            cv2.circle(
+                newframe,
+                (x, y),
+                int(Ball.radius),
+                (0, 255, 0),
+                -1,
+            )
 
-        cv2.circle(newframe, (x, y), 50, (255, 255, 255), 10)
-
-        if (x, y) not in POSlist:
-            POSlist.append((x, y))
-
-        cv2.circle(
-            newframe,
-            (x, y),
-            int(Ball.radius),
-            (0, 255, 0),
-            -1,
-        )
-
-        font_scale = cv2.getFontScaleFromHeight(cv2.FONT_HERSHEY_SIMPLEX, 30, 3)
-        cv2.putText(
-            newframe,
-            "ID:" + chr(ord("A") + ball.id),
-            (int(x + Ball.radius * 2.2), y + 33),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            newframe,
-            "V=" + str(round(v)),
-            (int(x + Ball.radius * 2.2), y - 3),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
+            font_scale = cv2.getFontScaleFromHeight(cv2.FONT_HERSHEY_SIMPLEX, 30, 3)
+            cv2.putText(
+                newframe,
+                "ID:" + chr(ord("A") + ball.id),
+                (int(x + Ball.radius * 2.2), y + 33),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                newframe,
+                "V=" + str(round(v)),
+                (int(x + Ball.radius * 2.2), y - 3),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
 
     cv2.putText(
         newframe,

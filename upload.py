@@ -84,20 +84,42 @@ while True:
         response = table.put_item(Item=data)
 
         print("Hit.json upload success!")
-    id = 5
 
-    # if t - t_reset > 3:
-    #     print("Wait...")
-    #     response = table.get_item(Key={"Id": id})
-    #     item = response.get("Item")
-    #     if item is not None:
-    #         t_reset = t
-    #         print(f"Item with ID {id} found:", item)
-    #         table.delete_item(Key={"Id": id})
-    #         del item["Id"]
-    #         with open("reset.json", "w") as file:
-    #             json.dump(item, file, cls=DecimalEncoder)
+    # id = 5
 
-    #         print("reset")
+    if t - t_reset > 3:
+        print("Wait...")
+
+        for id in [3, 4, 5, 6]:
+            response = table.get_item(Key={"Id": id})
+            item = response.get("Item")
+
+            if item is not None:
+                t_reset = t
+                print(f"Item with ID {id} found:", item)
+                table.delete_item(Key={"Id": id})
+                del item["Id"]
+
+                if id == 3:
+                    with open("./unity/Player1_Data/HitParams.json", "w") as file:
+                        json.dump(item, file, cls=DecimalEncoder)
+
+                    print("Data saved to HitParams.json")
+
+                if id == 4:
+                    with open("./unity/Player1_Data/CueBallPosition.json", "w") as file:
+                        json.dump(item, file, cls=DecimalEncoder)
+
+                    print("Position data saved to CueBallPosition.json")
+                if id == 5:
+                    with open("reset.json", "w") as file:
+                        json.dump(item, file, cls=DecimalEncoder)
+                    print("reset")
+                    t_reset = t_reset - 2
+                if id == 6:
+                    with open("turn.json", "w") as file:
+                        json.dump(item, file, cls=DecimalEncoder)
+                    print("turn")
+                    t_reset = t_reset - 2
 
     time.sleep(0.1)  # Wait for 0.1 seconds.
